@@ -13,6 +13,8 @@
   [lamC  (arg  symbol?) (body  ExprC?)] ; nomes não são mais necessários
   [appC  (fun  ExprC?) (arg  ExprC?)]
   [ifC   (condição  ExprC?) (sim  ExprC?) (não  ExprC?)]
+  [quoteC (s symbol?)]
+  [loadC  (f ExprC?)]
   )
 
 
@@ -27,7 +29,10 @@
   [uminusS (e  ExprS?)]
   [multS   (l  ExprS?) (r  ExprS?)]
   [ifS     (c  ExprS?) (s  ExprS?) (n  ExprS?)]
-  [letS    (s symbol?) (val ExprS?) (body ExprS?)]
+  [letS    (s  symbol?) (val  ExprS?) (body  ExprS?)]
+  [let*S   (s1 symbol?) (val1 ExprS?) (s2 symbol?) (val2 ExprS?) (body ExprS?)]
+  [quoteS  (s  symbol?)]
+  [loadS   (f  ExprS?)]
   )
 
 
@@ -44,6 +49,9 @@
     [uminusS (e)   (multC (numC -1) (desugar e))]
     [ifS     (c s n) (ifC (desugar c) (desugar s) (desugar n))]
     [letS    (s val body) (appC (lamC s (desugar body)) (desugar val))]
+    [let*S   (s1 val1 s2 val2 body) (appC (lamC s1 (appC (lamC s2 (desugar body)) (desugar val2))) (desugar val1))]
+    [quoteS  (s) (quoteC s)]
+    [loadS   (f) (loadC (desugar f))]
     ))
 
 
@@ -61,8 +69,8 @@
 (define extend-env cons) ; Por sorte, cons faz exatamente o que queremos para estender o env
 (define-type Value
   [numV  (n  number?)]
-  [closV (arg  symbol?) (body  ExprC?) (env  list?)])
-
+  [closV (arg  symbol?) (body  ExprC?) (env  list?)]
+  [symV  (s symbol?)])
 
 ; Novos operadores
 (define (num+ l r); Value x Value => Value
@@ -78,6 +86,13 @@
              (numV (* (numV-n l) (numV-n r)))]
         [else
              (error 'num* "Um dos argumentos não é número")]))
+
+(define (interpFile s)
+  (ReadFile (open-input-file (~a (symV-s s))))) 
+
+; Le o arquivo e interpreta as linhas
+(define (ReadFile f)
+  ((lambda (line) (when (not (or (eof-object? line) (null? line))) (begin (println (interpS line)) (ReadFile f)))) (read f)))
 
 ; Interpretador
 (define (interp a env); ExprC x Env => Value
@@ -96,6 +111,9 @@
     [plusC (l r) (num+ (interp l env) (interp r env))]
     [multC (l r) (num* (interp l env) (interp r env))]
     [ifC (c s n) (if (zero? (numV-n (interp c env))) (interp n env) (interp s env))]
+    [quoteC (s) (symV s)]
+    [loadC  (f)
+            (interpFile (interp f env))]
     ))
 
 ; Lookup para procurar símbolos no Environment
@@ -125,9 +143,11 @@
          [(call) (appS (parse (second sl)) (parse (third sl)))]
          [(if) (ifS (parse (second sl)) (parse (third sl)) (parse (fourth sl)))]
          [(let) (letS (first (second sl)) (parse (second (second sl))) (parse (third sl)))]
+         [(let*) (let*S (first (second sl)) (parse (second (second sl))) (first (third sl)) (parse (second (third sl))) (parse (fourth sl)))]
+         [(quote) (quoteS (second sl))]
+         [(load)  (loadS (parse (second sl)))]
          [else (error 'parse "invalid list input")]))]
     [else (error 'parse "invalid input")]))
-
 
 ; Facilitador
 (define (interpS s) (interp (desugar (parse s)) mt-env))
@@ -138,6 +158,13 @@
       (numV 15))
 (interpS '(+ 10 (call (func x (+ x x)) 16)))
 
+(interpS '(quote test.txt))
+
 (interp (desugar (letS 'x (numS 3) (idS 'x))) mt-env)
 
 (interpS '(let (x 3) x))
+(interpS '(let* (x 2) (y x) y))
+;((lambda (x) (println (read x)) (println (read x))) (open-input-file (~a 'test.txt)))
+;(TestRead (open-input-file (~a 'test.txt)))
+
+(interpS '(load (quote test.txt)))
