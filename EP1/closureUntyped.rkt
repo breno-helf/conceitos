@@ -15,6 +15,7 @@
   [ifC   (condição  ExprC?) (sim  ExprC?) (não  ExprC?)]
   [quoteC (s symbol?)]
   [loadC  (f ExprC?)]
+  [letrecC (s symbol?) (f ExprC?) (b ExprC?)]
   )
 
 
@@ -31,6 +32,7 @@
   [ifS     (c  ExprS?) (s  ExprS?) (n  ExprS?)]
   [letS    (s  symbol?) (val  ExprS?) (body  ExprS?)]
   [let*S   (s1 symbol?) (val1 ExprS?) (s2 symbol?) (val2 ExprS?) (body ExprS?)]
+  [letrecS (s symbol?) (f ExprS?) (b ExprS?)]
   [quoteS  (s  symbol?)]
   [loadS   (f  ExprS?)]
   )
@@ -50,6 +52,7 @@
     [ifS     (c s n) (ifC (desugar c) (desugar s) (desugar n))]
     [letS    (s val body) (appC (lamC s (desugar body)) (desugar val))]
     [let*S   (s1 val1 s2 val2 body) (appC (lamC s1 (appC (lamC s2 (desugar body)) (desugar val2))) (desugar val1))]
+    [letrecS (s f b) (letrecC s (desugar f) (desugar b))]
     [quoteS  (s) (quoteC s)]
     [loadS   (f) (loadC (desugar f))]
     ))
@@ -108,6 +111,11 @@
                         (bind (closV-arg f-value) (interp a env))
                         (closV-env f-value) ; não mais mt-env
                     )))]
+    [letrecC (s f b)
+             (local ([define s-name (interp f env)])
+               (begin (set-closV-env! s-name (extend-env (bind s s-name) env))
+                      (interp b (extend-env (bind s s-name) env))))]
+
     [plusC (l r) (num+ (interp l env) (interp r env))]
     [multC (l r) (num* (interp l env) (interp r env))]
     [ifC (c s n) (if (zero? (numV-n (interp c env))) (interp n env) (interp s env))]
@@ -144,6 +152,7 @@
          [(if) (ifS (parse (second sl)) (parse (third sl)) (parse (fourth sl)))]
          [(let) (letS (first (second sl)) (parse (second (second sl))) (parse (third sl)))]
          [(let*) (let*S (first (second sl)) (parse (second (second sl))) (first (third sl)) (parse (second (third sl))) (parse (fourth sl)))]
+         [(letrec) (letrecS (first (second sl)) (parse (second (second sl))) (parse (third sl)))]
          [(quote) (quoteS (second sl))]
          [(load)  (loadS (parse (second sl)))]
          [else (error 'parse "invalid list input")]))]
@@ -153,18 +162,22 @@
 (define (interpS s) (interp (desugar (parse s)) mt-env))
 
 ; Testes
+; Testes default
 (test (interp (plusC (numC 10) (appC (lamC '_ (numC 5)) (numC 10)))
               mt-env)
       (numV 15))
 (interpS '(+ 10 (call (func x (+ x x)) 16)))
 
-(interpS '(quote test.txt))
 
-(interp (desugar (letS 'x (numS 3) (idS 'x))) mt-env)
+(test (interpS '(quote test.txt)) (symV 'test.txt)) ; Teste do Quote
 
-(interpS '(let (x 3) x))
-(interpS '(let* (x 2) (y x) y))
-;((lambda (x) (println (read x)) (println (read x))) (open-input-file (~a 'test.txt)))
-;(TestRead (open-input-file (~a 'test.txt)))
+(test (interp (desugar (letS 'x (numS 3) (idS 'x))) mt-env) (numV 3)) ; Teste do letS
 
-(interpS '(load (quote test.txt)))
+(test (interpS '(let (x 3) x)) (numV 3)) ; Teste do let
+(test (interpS '(let* (x 2) (y x) (+ x y))) (numV 4)) ; Teste do let*
+
+(interpS '(load (quote test.txt))) ; Teste do load
+
+(test (interpS '(call (lambda n n) 4)) (numV 4)) ; Testando lambda 
+
+(test (interpS '(letrec (fact (lambda n (if n (* n (call fact (- n 1))) 1))) (call fact 5)))  (numV 120)) ; Teste do fatorial
