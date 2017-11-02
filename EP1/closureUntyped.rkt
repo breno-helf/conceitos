@@ -150,9 +150,10 @@
          [(lambda) (lamS (second sl) (parse (third sl)))]
          [(call) (appS (parse (second sl)) (parse (third sl)))]
          [(if) (ifS (parse (second sl)) (parse (third sl)) (parse (fourth sl)))]
-         [(let) (letS (first (second sl)) (parse (second (second sl))) (parse (third sl)))]
-         [(let*) (let*S (first (second sl)) (parse (second (second sl))) (first (third sl)) (parse (second (third sl))) (parse (fourth sl)))]
-         [(letrec) (letrecS (first (second sl)) (parse (second (second sl))) (parse (third sl)))]
+         [(let) (letS (first (first (second sl))) (parse (second (first (second sl)))) (parse (third sl)))]
+         [(let*) (let*S (first (first (second sl))) (parse (second (first (second sl)))) (first (second (second sl))) (parse (second (second (second sl))))
+                        (parse (third sl)))]
+         [(letrec) (letrecS (first (first (second sl))) (parse (second (first (second sl)))) (parse (third sl)))]
          [(quote) (quoteS (second sl))]
          [(load)  (loadS (parse (second sl)))]
          [else (error 'parse "invalid list input")]))]
@@ -173,11 +174,14 @@
 
 (test (interp (desugar (letS 'x (numS 3) (idS 'x))) mt-env) (numV 3)) ; Teste do letS
 
-(test (interpS '(let (x 3) x)) (numV 3)) ; Teste do let
-(test (interpS '(let* (x 2) (y x) (+ x y))) (numV 4)) ; Teste do let*
+(test (interpS '(let ([x 3]) x)) (numV 3)) ; Teste do let
+(test (interpS '(let* ([x 1] [y 2]) (+ x y))) (numV 3)) ; Teste do let*
+(test (interpS '(let* ([x 2] [y x]) (+ x y))) (numV 4)) ; Teste do let*
+(test (interpS '(letrec ([f (lambda n n)]) (call f 3))) (numV 3)) ; Test do letrec
+
 
 (interpS '(load (quote test.txt))) ; Teste do load
 
 (test (interpS '(call (lambda n n) 4)) (numV 4)) ; Testando lambda 
 
-(test (interpS '(letrec (fact (lambda n (if n (* n (call fact (- n 1))) 1))) (call fact 5)))  (numV 120)) ; Teste do fatorial
+(test (interpS '(letrec ([fact (lambda n (if n (* n (call fact (- n 1))) 1))]) (call fact 5)))  (numV 120)) ; Teste do fatorial
