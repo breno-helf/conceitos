@@ -85,3 +85,16 @@
                             (send wallet amount 0)) ; <-- Method does not exist!
                        )))))
   "Class does not respond to the method amount")
+
+; Test Ultimate: This one is really hard, extra point for those who get it :)
+;                (because then you **really** understood shadowing)
+(test
+  (interpS '(let ([self 1])
+              (let ([Self (class Object self
+                                 (method self self (send self Self 2))
+                                 (method Self self 3) )])
+                (let ([self (new Self 4)])
+                  (send self self 5))
+                )))
+  (numV 3))
+
